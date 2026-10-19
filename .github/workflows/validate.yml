@@ -1,0 +1,64 @@
+name: Validate Skills Schema
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  validate-skills:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Validate SKILL.md Frontmatter
+        run: |
+          python -c "
+          import os, sys, yaml
+
+          errors = []
+          skills_dir = 'skills'
+          for skill in sorted(os.listdir(skills_dir)):
+              skill_path = os.path.join(skills_dir, skill)
+              if not os.path.isdir(skill_path):
+                  continue
+              skill_file = os.path.join(skill_path, 'SKILL.md')
+              if not os.path.exists(skill_file):
+                  errors.append(f'Missing SKILL.md in {skill}')
+                  continue
+              with open(skill_file, 'r', encoding='utf-8') as f:
+                  content = f.read()
+              if not content.startswith('---'):
+                  errors.append(f'{skill}/SKILL.md does not start with YAML frontmatter ---')
+                  continue
+              parts = content.split('---', 2)
+              if len(parts) < 3:
+                  errors.append(f'{skill}/SKILL.md invalid frontmatter demarcation')
+                  continue
+              try:
+                  meta = yaml.safe_load(parts[1])
+                  if not meta.get('name'):
+                      errors.append(f'{skill}/SKILL.md missing name')
+                  if not meta.get('description'):
+                      errors.append(f'{skill}/SKILL.md missing description')
+              except Exception as e:
+                  errors.append(f'{skill}/SKILL.md YAML error: {e}')
+
+          if errors:
+              print('Validation FAILED:')
+              for err in errors:
+                  print(f'  - {err}')
+              sys.exit(1)
+          else:
+              print('All skills validated successfully!')
+          "
